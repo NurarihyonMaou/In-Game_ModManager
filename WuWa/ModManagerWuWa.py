@@ -6,7 +6,7 @@ import os
 import re
 import json
 
-#Characters = {'df65bb00': 'Albedo', '3ef08385': 'Alhaitham', '46de82f3': 'Aloy', 'a2ea4b2d': 'Amber', '557b2eff': 'AmberCN', '0107925f': 'Ayaka', 'b473c856': 'Ayato',
+# Characters = {'df65bb00': 'Albedo', '3ef08385': 'Alhaitham', '46de82f3': 'Aloy', 'a2ea4b2d': 'Amber', '557b2eff': 'AmberCN', '0107925f': 'Ayaka', 'b473c856': 'Ayato',
 #              '17baa562': 'Baizhu', '85282151': 'Barbara', '8b9e7c22': 'BarbaraSummertime', '51197c51': 'Beidou', '6cff51b4': 'Bennett', '9cee8711': 'Candace',
 #              'c5a6d98e': 'Charlotte', '4d8d965a': 'Chevreuse', '186eac84': 'Childe', 'c8e25747': 'Chiori', '489e3621': 'Chongyun', '07f8ad68': 'Clorinde',
 #              '348e58c4': 'Collei', '226f076e': 'Cyno', '9aeecbcb': 'Dehya', '71625c4d': 'Diluc', 'a2d909c8': 'DilucFlamme', 'e8083f19': 'Diona', '2a2a63ab': 'Dori',
@@ -23,160 +23,15 @@ import json
 #              '76ed85f0': 'Xinyan', '3a7f71f5': 'Yae', 'eb8b62d3': 'Yanfei', '293449d6': 'YaoYao', 'c58c76f9': 'Yelan', '65618289': 'Yoimiya', '221f052e': 'YunJin',
 #              'a75ba32e': 'Zhongli', '6895f405': 'Arlecchino'}
 
-Characters = {
-    "Aalto": [
-        1,
-        "4f0a1fba",
-        "eacac19c"
-    ],
-    "Baizhi": [
-        2,
-        "d8d2286b",
-        "f2a0c0fa"
-    ],
-    "CalcharoBody": [
-        3,
-        "9c24e7eb",
-        "9c0c0163"
-    ],
-    "Changli": [
-        4,
-        "1ccb8008",
-        "060f5303"
-    ],
-    "Chixia": [
-        5,
-        "9b69878e",
-        "6d784a01"
-    ],
-    "Danjin": [
-        6,
-        "9f182348",
-        "8b542cad"
-    ],
-    "Encore": [
-        7,
-        "388cecb3",
-        "d4c99da1"
-    ],
-    "Jianxin": [
-        8,
-        "82d39ecb",
-        "068dd115"
-    ],
-    "Jinshi": [
-        9,
-        "8fb7baf7",
-        "4ae0a358"
-    ],
-    "Jiyan": [
-        10,
-        "7759b7d3",
-        "dd2c2a00"
-    ],
-    "Lingyang": [
-        11,
-        "d02c1cb1",
-        "2e3de562"
-    ],
-    "Mortefi": [
-        12,
-        "7d919713",
-        "d35566be"
-    ],
-    "RoverFemale": [
-        13,
-        "ac681fc1",
-        "972c1750"
-    ],
-    "RoverMale": [
-        14,
-        "3ab7c4d1",
-        "a4be44e5"
-    ],
-    "Sanhua": [
-        15,
-        "a80e0e2b",
-        "bf231a78"
-    ],
-    "Shorekeeper": [
-        16,
-        "78fd9b75",
-        "eecaa360"
-    ],
-    "Taoqi": [
-        17,
-        "9f13087a",
-        "9ab88d41"
-    ],
-    "Verina": [
-        18,
-        "15791c57",
-        "5a5debf6"
-    ],
-    "XiangliYao": [
-        19,
-        "e61f4606",
-        "5792c16a"
-    ],
-    "Yangyang": [
-        20,
-        "d70fa623",
-        "1b1ed7be"
-    ],
-    "Yinlin": [
-        21,
-        "41d656e8",
-        "0c7361ae"
-    ],
-    "Youhu": [
-        22,
-        "799c40e1",
-        "87aaf3fd"
-    ],
-    "Yuanwu": [
-        23,
-        "0b0fecc4",
-        "51677491"
-    ],
-    "Zhezhi": [
-        24,
-        "4cdc5987",
-        "7ebe61e9"
-    ]
-}
+GUIDS = []
 
+Mod_IDs = []
 
-Mod_IDs = {
-    "Aalto": 1,
-    "Baizhi": 1,
-    "CalcharoBody": 1,
-    "Changli": 1,
-    "Chixia": 1,
-    "Danjin": 1,
-    "Encore": 1,
-    "Jianxin": 1,
-    "Jinshi": 1,
-    "Jiyan": 1,
-    "Lingyang": 1,
-    "Mortefi": 1,
-    "RoverFemale": 1,
-    "RoverMale": 1,
-    "Sanhua": 1,
-    "Shorekeeper": 1,
-    "Taoqi": 1,
-    "Verina": 1,
-    "XiangliYao": 1,
-    "Yangyang": 1,
-    "Yinlin": 1,
-    "Youhu": 1,
-    "Yuanwu": 1,
-    "Zhezhi": 1
-}
+detection_hashes = []
 
 Variables = """; Mod Manager
 global $ModID = {Mod_ID}
-global $CharacterID = {Character_ID}
+global $GlobalModID = {GlobalModID}
 
 global $IncludedInMaxCount = 0
 global $First_Run = 1
@@ -186,21 +41,21 @@ global $Resources_Set = 0
 """
 
 Present_Section = """; Mod Manager
-if $\\NuraThings\\ModManager\\CharacterModData\\Active_{Character_Name} == 1
+if $\\NuraThings\\ModManager\\ModData\\Active_{Mod_GUID} == 1
     if $First_Run == 1
         pre $\\NuraThings\\ModManager\\first_run = 1
         $First_Run = 0
     endif
 
     if $\\NuraThings\\ModManager\\config_mode == 1
-        if $\\NuraThings\\ModManager\\charSwap == 1
+        if $\\NuraThings\\ModManager\\ModSwap == 1
             $IncludedInMaxCount = 0
             $Resources_Set = 0
         endif
 
         if $IncludedInMaxCount == 0
-            if $\\NuraThings\\ModManager\\currentCharMaxID < $ModID
-                $\\NuraThings\\ModManager\\currentCharMaxID = $ModID
+            if $\\NuraThings\\ModManager\\currentModMaxID < $ModID
+                $\\NuraThings\\ModManager\\currentModMaxID = $ModID
             endif
             $IncludedInMaxCount = 1
         endif
@@ -211,9 +66,9 @@ else if $IncludedInMaxCount == 1
     post $Resources_Set = 0
 endif
 
-if $\\NuraThings\\ModManager\\CharacterModData\\{Character_Name} == $ModID
+if $\\NuraThings\\ModManager\\ModData\\GUID{Mod_GUID} == $ModID
     post $mod_enabled = 1
-    
+
     if $Resources_Set == 0
         post Resource\\NuraThings\\ModManager\\ModPath = ref ResourceModPath unless_null
         post Resource\\NuraThings\\ModManager\\ModName = ref ResourceModName unless_null
@@ -234,21 +89,91 @@ endif
 
 """
 
-#Component_Hash = 'f02baf77'
+# Component_Hash = 'f02baf77'
 
-Character_Name = ''
-Character_ID = 0
+ModName = ''
+GlobalModID = 0
+
+match_index_count = []
 
 use_mod_name = False
 
 target_strings = ['match_priority', 'allow_duplicate_hash', 'match_first_index', 'match_index_count']
 
-CharacterMaxVertexCount = {}
+ModMaxVertexCount = {}
 
 iteration = 0
 
+def generate_ini():
+    output_file = "BufferValues/NuraThings/ModManager/ModData.ini"
+
+    Ini = "namespace = NuraThings\ModManager\ModData\n\n[Constants]\n"
+
+    for Run in range(1, 6):
+        for Index, GUID in enumerate(GUIDS):
+
+            if Run == 1:
+                Ini += f"global persist $GUID{GUID} = 1\n\n"
+                if Index == len(GUIDS) - 1:
+                    Ini += "\n"
+
+            elif Run == 2:
+                Ini += f"global $Active_{GUID} = 0\n\n"
+                if Index == len(GUIDS) - 1:
+                    Ini += "\n[Present]\n"
+
+            elif Run == 3:
+                Ini += f"post $Active_{GUID} = 0\n\n"
+                if Index == len(GUIDS) - 1:
+                    Ini += "\n[CommandListSaveModID]\n"
+
+            elif Run == 4:
+                Ini += (f"if $\\NuraThings\\ModManager\\globalModID == {Index+1}\n"
+                        f"    $GUID{GUID} = $\\NuraThings\\ModManager\\currentModID\n"
+                        "endif\n\n")
+                if Index == len(GUIDS) - 1:
+                    Ini += "\n"
+#detection_hashes[Index]
+            elif Run == 5:
+                Ini += (f"[TextureOverride{GUID}]\n"
+                        f"hash = f02baf77\n"
+                        f"match_first_index = 0\n"
+                        f"match_index_count = {match_index_count[Index]}\n"
+                        f"$\\NuraThings\\ModManager\\activeMods = $\\NuraThings\\ModManager\\activeMods+1\n"
+                        f"if $\\NuraThings\\ModManager\\activeID == {Index+1} || $\\NuraThings\\ModManager\\activeID == 0\n"
+                        f"    $Active_{GUID} = 1\n"
+                        f"    $\\NuraThings\\ModManager\\globalModID = {Index+1}\n"
+                        f"    if $GUID{GUID} != -1\n"
+                        f"        $\\NuraThings\\ModManager\\currentModID = $GUID{GUID}\n"
+                        "    endif\n"
+                        "endif\n\n")
+
+    with open(output_file, 'w+') as file:
+        file.write(Ini)
+
+    print(f"INI file has been created at: {os.getcwd()+'/'+output_file}")
+
+
+def find_hash(data):
+    global match_index_count
+    #\[([^\]]+)\][\s\S]?hash\s*=\s*([a-f0-9]+)[\s\S]*?\$object_detected\s*=\s*1
+    #\[\s*([^\]]+)\s*\](?:(?!\[\s*).)*?hash\s*=\s*([a-f0-9]+)(?:(?!\[\s*).)*?\$object_detected\s*=\s*1(?![\s\S]*?\$object_detected\s*=\s*0)
+    #ShapeKeyOffsets
+    section_pattern = re.compile(r'\[\s*([^\]]*Component0[^\]]*)\s*\].*?hash\s*=\s*([a-f0-9]+).*?match_index_count\s*=\s*(\d+)',
+                                 re.DOTALL)
+
+    match = re.search(section_pattern, data)
+
+    if match:
+        match_index_count.append(match.group(3))
+        return match.group(2)
+    else:
+        return 0
+
+
 def get_sections(data):
-    return re.findall(r'(\[.*\][^\[]*?\n\s*hash\s*=\s*[a-f0-9]{8}[\s\S]*?)(?=\s*(?:\s*;.*\n)*\s*\[)\s*', data+'[', re.IGNORECASE)
+    return re.findall(r'(\[.*\][^\[]*?\n\s*hash\s*=\s*[a-f0-9]{8}[\s\S]*?)(?=\s*(?:\s*;.*\n)*\s*\[)\s*', data + '[',
+                      re.IGNORECASE)
 
 
 def parse_key_section(match):
@@ -300,16 +225,19 @@ def get_toggles(data):
 
 
 def collect_ini(folder_path):
-
     global Variables
     global Present_Section
 
+    global detection_hashes
+
     global use_mod_name
 
-    global Character_Name
-    global Character_ID
+    global ModName
+    global GlobalModID
 
     global Mod_IDs
+
+    global match_index_count
 
     ini_files = []
     ini_paths = []
@@ -320,22 +248,24 @@ def collect_ini(folder_path):
 
         if os.path.isdir(file_path):
             collect_ini(file_path)
-        elif (os.path.splitext(filename)[1] == ".ini" and "desktop" not in filename.lower() and "ntuser" not in filename.lower() and "backup" not in filename.lower()) and 'disabled' not in filename.lower():
+        elif (os.path.splitext(filename)[
+                  1] == ".ini" and "desktop" not in filename.lower() and "ntuser" not in filename.lower() and "backup" not in filename.lower()) and 'disabled' not in filename.lower():
             ini_files.append(filename)
             ini_paths.append(file_path)
-
 
     for ini_file, ini_path in zip(ini_files, ini_paths):
         Sections = []
         Key_Conditions = []
+
+        GUID_ID = 0
 
         toggles = []
 
         head, tail = os.path.split(folder_path)
         mod_name = tail
 
-        Character_Name = ''
-        Character_ID = 0
+        ModName = ''
+        GlobalModID = 0
 
         try:
             data = ''
@@ -343,6 +273,17 @@ def collect_ini(folder_path):
 
             with open(os.path.join(folder_path, ini_file), "r+", encoding="utf-8") as f:
                 data = f.read()
+
+                if 'global $object_guid' not in data:
+                    return
+                else:
+                    match = re.search(r'global \$object_guid = (\d+)', data)
+                    if match.group(1) not in GUIDS:
+                        GUIDS.append(match.group(1))
+                        Mod_IDs.append(1)
+                        detection_hashes.append(find_hash(data))
+
+                    GUID_ID = GUIDS.index(match.group(1))
 
                 toggles = get_toggles(data)
 
@@ -363,9 +304,9 @@ def collect_ini(folder_path):
                                 else:
                                     amount_of_toggles = toggle[5]
                                 if toggle[0].replace('Key', '').capitalize() != toggle[3].capitalize():
-                                    toggles_info += f'''\n{toggle[0].replace('Key', '').capitalize()}/{toggle[3].capitalize()} ({amount_of_toggles}): {toggle[1]}{" and "+toggle[7] if toggle[7] else ""}'''
+                                    toggles_info += f'''\n{toggle[0].replace('Key', '').capitalize()}/{toggle[3].capitalize()} ({amount_of_toggles}): {toggle[1]}{" and " + toggle[7] if toggle[7] else ""}'''
                                 else:
-                                    toggles_info += f'''\n{toggle[3].capitalize()} ({amount_of_toggles}): {toggle[1]}{" and "+toggle[7] if toggle[7] else ""}'''
+                                    toggles_info += f'''\n{toggle[3].capitalize()} ({amount_of_toggles}): {toggle[1]}{" and " + toggle[7] if toggle[7] else ""}'''
 
                     if add_other_controls:
                         toggles_info += '\n\n\nHold: Key(s)\n'
@@ -380,7 +321,7 @@ def collect_ini(folder_path):
                         with open(os.path.join(folder_path, 'Toggles.txt'), "w", encoding="utf-8") as ft:
                             ft.write(toggles_info)
                             ft.close()
-                            print('Generated Toggles.txt inside - '+folder_path+'\n')
+                            print('Generated Toggles.txt inside - ' + folder_path + '\n')
 
                 if 'data = "Unnamed Mod"' in data or 'data = "Empty Mod Name"' in data or '[ResourceModName]' not in data:
                     use_mod_name = True
@@ -395,13 +336,10 @@ def collect_ini(folder_path):
 
                 Sections = get_sections(data)
 
-                for Chara in Characters:
-                    if Characters[Chara][1] in data and Characters[Chara][2] in data:
-                        Character_Name = Chara
-                        Character_ID = Characters[Chara][0]
-                        if mod_name is Chara+'Mod':
-                            use_mod_name = False
-
+                for Index, GUID in enumerate(GUIDS):
+                    if 'global $object_guid = '+GUID in data:
+                        ModName = GUID
+                        GlobalModID = Index+1
 
                 match_vertex_count = re.search(r'global \$mesh_vertex_count\s*=\s*(\d+)', og_data)
                 Mesh_Vertex_Count = 0
@@ -410,22 +348,23 @@ def collect_ini(folder_path):
                     Mesh_Vertex_Count = int(match_vertex_count.group(1))
 
                 if iteration == 0:
-                    if Character_Name != '' and Mesh_Vertex_Count > 0:
-                        print(CharacterMaxVertexCount, Mesh_Vertex_Count)
-                        if Character_Name in CharacterMaxVertexCount:
-                            if Mesh_Vertex_Count > CharacterMaxVertexCount[Character_Name]:
-                                CharacterMaxVertexCount[Character_Name] = Mesh_Vertex_Count
+                    if ModName != '' and Mesh_Vertex_Count > 0:
+                        print(ModMaxVertexCount, Mesh_Vertex_Count)
+                        if ModName in ModMaxVertexCount:
+                            if Mesh_Vertex_Count > ModMaxVertexCount[ModName]:
+                                ModMaxVertexCount[ModName] = Mesh_Vertex_Count
                         else:
-                            CharacterMaxVertexCount[Character_Name] = Mesh_Vertex_Count
+                            ModMaxVertexCount[ModName] = Mesh_Vertex_Count
 
                     continue
 
-                if Character_Name != '' and 'global $mod_enabled = 0' in data and '$\\NuraThings\\ModManager\\CharacterModData' not in data and 'namespace = NuraThings' not in data:
+                if ModName != '' and 'global $mod_enabled = 0' in data and '$\\NuraThings\\ModManager\\ModData' not in data and 'namespace = NuraThings' not in data:
 
-                    if Character_Name in CharacterMaxVertexCount:
-                        if Mesh_Vertex_Count < CharacterMaxVertexCount[Character_Name]:
+                    if ModName in ModMaxVertexCount:
+                        if Mesh_Vertex_Count < ModMaxVertexCount[ModName]:
                             data = data.replace(r'global $mesh_vertex_count = ' + str(Mesh_Vertex_Count),
-                                                r'global $mesh_vertex_count = ' + str(CharacterMaxVertexCount[Character_Name]))
+                                                r'global $mesh_vertex_count = ' + str(
+                                                    ModMaxVertexCount[ModName]))
 
                     if len(Key_Conditions) > 0:
                         for condition in Key_Conditions:
@@ -448,26 +387,24 @@ def collect_ini(folder_path):
                                 if any(target_string in str(elem) for target_string in target_strings):
                                     max_index = max(max_index, i)
 
-
                         HashID = [index for (index, item) in enumerate(PartsOfSection) if
-                                'hash' in item and ';' not in item and 'allow_duplicate_hash' not in item]
+                                  'hash' in item and ';' not in item and 'allow_duplicate_hash' not in item]
 
                         HashID = HashID[0]
                         Hash = PartsOfSection[HashID]
 
-
                         if not has_match_priority:
                             if '[TextureOverride' in Section:
-                                Section = Section.replace(Hash, Hash+'\nmatch_priority = 0')
+                                Section = Section.replace(Hash, Hash + '\nmatch_priority = 0')
                             elif '[ShaderOverride' in Section:
-                                Section = Section.replace(Hash, Hash+'\nallow_duplicate_hash = True')
+                                Section = Section.replace(Hash, Hash + '\nallow_duplicate_hash = True')
                             PartsOfSection = Section.splitlines()
 
-
                         if 'if $mod_enabled' not in Section:
-                            priority_index = max_index if max_index > -1 else HashID+1
+                            priority_index = max_index if max_index > -1 else HashID + 1
 
-                            Section = Section.replace(PartsOfSection[priority_index], PartsOfSection[priority_index]+'\nif $mod_enabled')
+                            Section = Section.replace(PartsOfSection[priority_index],
+                                                      PartsOfSection[priority_index] + '\nif $mod_enabled')
 
                             depth = 0
                             indent = ' ' * 4
@@ -498,9 +435,10 @@ def collect_ini(folder_path):
 
                         data = data.replace(OldSection, Section)
 
-                    data += '\n[Constants]\n' + Variables.format(Character_ID=Character_ID, Mod_ID=Mod_IDs[Character_Name])
-                    Mod_IDs[Character_Name] = Mod_IDs[Character_Name]+1
-                    data += '\n[Present]\n' + Present_Section.format(Character_Name=Character_Name)
+                    data += '\n[Constants]\n' + Variables.format(GlobalModID=GlobalModID,
+                                                                 Mod_ID=Mod_IDs[GUID_ID])
+                    Mod_IDs[GUID_ID] = Mod_IDs[GUID_ID] + 1
+                    data += '\n[Present]\n' + Present_Section.format(Mod_GUID=ModName)
 
                     if use_mod_name:
                         if '[ResourceModName]' not in og_data:
@@ -521,7 +459,8 @@ data = "Unnamed Mod"
                         use_mod_name = False
 
                     if len(toggles) > 0:
-                        data = data.replace('    if $Resources_Set == 0', '    if $Resources_Set == 0\n\tpost Resource\\NuraThings\\ModManager\\ModToggles = ref ResourceModToggles unless_null')
+                        data = data.replace('    if $Resources_Set == 0',
+                                            '    if $Resources_Set == 0\n\tpost Resource\\NuraThings\\ModManager\\ModToggles = ref ResourceModToggles unless_null')
                         data += '''
 [ResourceModToggles]
 type = Buffer
@@ -534,21 +473,23 @@ filename = Toggles.txt
                     with open(os.path.join(folder_path, 'ModPath.txt'), "w+", encoding="utf-8") as mp:
                         mp.write(ini_path)
                         mp.close()
-                        print('Generated - '+os.path.join(folder_path, 'ModPath.txt')+'\n')
+                        print('Generated - ' + os.path.join(folder_path, 'ModPath.txt') + '\n')
 
                     if data != og_data:
                         f.seek(0)
                         f.truncate(0)
                     f.close()
 
-                if not os.path.exists(os.path.join(folder_path, 'DISABLED_ModManagerBackup_'+ini_file)):
-                    with open(os.path.join(folder_path, 'DISABLED_ModManagerBackup_'+ini_file), "w", encoding="utf-8") as f:
+                if not os.path.exists(os.path.join(folder_path, 'DISABLED_ModManagerBackup_' + ini_file)):
+                    with open(os.path.join(folder_path, 'DISABLED_ModManagerBackup_' + ini_file), "w",
+                              encoding="utf-8") as f:
                         f.write(og_data)
                         f.close()
                         print(f'''Created Backup - {os.path.join(folder_path, 'DISABLED_ModManagerBackup_' + ini_file)}
 ''')
                 else:
-                    print(f'''Backup already Exists - {os.path.join(folder_path, 'DISABLED_ModManagerBackup_' + ini_file)}
+                    print(
+                        f'''Backup already Exists - {os.path.join(folder_path, 'DISABLED_ModManagerBackup_' + ini_file)}
 ''')
 
                 if data != og_data:
@@ -579,7 +520,9 @@ def main():
 
     with open(os.path.join(os.getcwd(), 'ModsIDs.json'), 'w+') as file:
         json.dump(Mod_IDs, file)
-        print('\nGenerated ModsIDs.json inside - '+os.getcwd())
+        print('\nGenerated ModsIDs.json inside - ' + os.getcwd())
+
+    generate_ini()
 
 
 main()
