@@ -5,6 +5,7 @@
 import os
 import re
 import json
+from collections import defaultdict
 
 # Characters = {'df65bb00': 'Albedo', '3ef08385': 'Alhaitham', '46de82f3': 'Aloy', 'a2ea4b2d': 'Amber', '557b2eff': 'AmberCN', '0107925f': 'Ayaka', 'b473c856': 'Ayato',
 #              '17baa562': 'Baizhu', '85282151': 'Barbara', '8b9e7c22': 'BarbaraSummertime', '51197c51': 'Beidou', '6cff51b4': 'Bennett', '9cee8711': 'Candace',
@@ -23,7 +24,7 @@ import json
 #              '76ed85f0': 'Xinyan', '3a7f71f5': 'Yae', 'eb8b62d3': 'Yanfei', '293449d6': 'YaoYao', 'c58c76f9': 'Yelan', '65618289': 'Yoimiya', '221f052e': 'YunJin',
 #              'a75ba32e': 'Zhongli', '6895f405': 'Arlecchino'}
 
-Characters={
+Characters = {
     'Albedo': ['1', 'df65bb00', '0d7dc936', '3b4159ca', '9f6d193b'],
     'Alhaitham': ['2', '3ef08385', '639d1fb8', '1d1783dd', 'be0197c5'],
     'Aloy': ['3', '46de82f3', '5d1da717', '2b5e2530', 'f8d61c99'],
@@ -132,7 +133,7 @@ Characters={
     'Zhongli': ['106', 'a75ba32e', '4c8480f5', 'f0a40042', 'eb3aaca2']
 }
 
-Mod_IDs={
+Mod_IDs = {
     'Albedo': 1,
     'Alhaitham': 1,
     'Aloy': 1,
@@ -241,23 +242,22 @@ Mod_IDs={
     'Zhongli': 1
 }
 
-Variables="""; Mod Manager
+Variables = """; Mod Manager
 global $Mod_Enabled = 0
 global $ModID = {Mod_ID}
 global $CharacterID = {Character_ID}
 
 global $IncludedInMaxCount = 0
-global $First_Run = 1
+global $ModManager_First_Run = 1
 
 global $Resources_Set = 0
-
 """
 
-Present_Section="""; Mod Manager
+Present_Section = """; Mod Manager
 if $\\NuraThings\\ModManager\\CharacterModData\\Active_{Character_Name} == 1
-    if $First_Run == 1
+    if $ModManager_First_Run == 1
         pre $\\NuraThings\\ModManager\\first_run = 1
-        $First_Run = 0
+        $ModManager_First_Run = 0
     endif
 
     if $\\NuraThings\\ModManager\\config_mode == 1
@@ -271,6 +271,32 @@ if $\\NuraThings\\ModManager\\CharacterModData\\Active_{Character_Name} == 1
                 $\\NuraThings\\ModManager\\currentCharMaxID = $ModID
             endif
             $IncludedInMaxCount = 1
+        endif
+        
+        if $\\NuraThings\\ModManager\\leftID == $ModID || $\\NuraThings\\ModManager\\middleID == $ModID || $\\NuraThings\\ModManager\\rightID == $ModID
+            if $\\NuraThings\\ModManager\\leftID == $ModID
+                x79 = -0.875
+                z79 = 2.5
+            endif
+
+            if $\\NuraThings\\ModManager\\middleID == $ModID
+                x79 = 0.0
+                z79 = 2.25
+            endif
+
+            if $\\NuraThings\\ModManager\\rightID == $ModID
+                x79 = 0.875
+                z79 = 2.5
+            endif
+            
+            if $\\NuraThings\\ModManager\\gallery_mode
+                clear = ps-u3
+                clear = vs-t0
+                clear = vs-t1
+                clear = ib
+                clear = ps-t12
+                run = CustomShaderDrawModel
+            endif
         endif
     endif
 
@@ -294,55 +320,548 @@ endif
 
 """
 
-Character_Name=''
-Character_ID=0
+Character_Name = ''
+Character_ID = 0
 
-preserve_data=False
+preserve_data = False
 
-rabbit_path=''
-rabbit_namespace=''
+rabbit_path = ''
+rabbit_namespace = ''
 
-use_mod_name=True
+use_mod_name = True
 
-reset_next=False
+reset_next = False
 
-target_strings=['match_priority', 'allow_duplicate_hash', 'match_first_index', 'match_index_count']
+target_strings = ['match_priority', 'allow_duplicate_hash', 'match_first_index', 'match_index_count']
+
+gallery_resources = ''
+
+
+import regex
+from collections import defaultdict
+
+
+
+
+def find_if_blocks(text):
+    Nest_Layers = 0
+    new_lines = []
+
+    lines = text.splitlines()
+
+    for line in lines:
+
+        lower_line = line.lower()
+        #print(f"{Nest_Layers} - {line}")
+        if ';' not in line and lower_line.strip().startswith('if'):
+            Nest_Layers += 1
+            new_lines.append(line)
+        elif ';' not in line and lower_line.strip().startswith('endif'):
+            Nest_Layers -= 1
+            new_lines.append(line)
+        elif Nest_Layers > 0:
+            new_lines.append(line)
+
+    return new_lines
+
+
+
+def get_drawindexed(ini_data, command_lists):
+    # Updated pattern to capture sections up to the next line starting with `[`
+    section_pattern = r"(\[TextureOverride[^\]]+\][\s\S]*?)(?=^\[|\Z)"
+    drawindexed_pattern = r"^\s*(drawindexed\s*=\s*(auto|[\d,\s]+))"
+    if_block_pattern = r"(?s)(if.*?(?:(?R).*?)?endif)"
+
+    # Extract all sections
+    sections = re.findall(section_pattern, ini_data, re.MULTILINE)
+
+    # Dictionary to store each section's drawindexed and if blocks
+    section_data = defaultdict(dict)
+
+    # Process each section
+    for section in sections:
+        # Extract the section header
+        header = re.match(r"^\[([^\]]+)\]", section)
+        if header:
+            section_name = header.group(1)
+        else:
+            continue  # Skip if header not found
+
+        # Extract all if blocks to separate them
+        if_blocks = find_if_blocks(section)
+        #if_blocks = re.findall(if_block_pattern, section, re.DOTALL)
+
+        # Remove if blocks temporarily to capture only top-level drawindexed commands
+
+        #section_without_if_blocks = section.replace("\n".join(if_blocks), '')
+
+        out_lines = []
+        lines = section.splitlines()
+        for line in lines:
+            if line in if_blocks:
+                continue
+            out_lines.append(line)
+
+        section_without_if_blocks = "\n".join(out_lines)
+
+        # Extract standalone drawindexed commands (outside if blocks)
+        standalone_drawindexed = [match[0] for match in re.findall(drawindexed_pattern, section_without_if_blocks, re.MULTILINE)]
+        #print(standalone_drawindexed)
+        # Store data in dictionary
+        section_data[section_name] = {
+            "header": section_name,
+            "standalone_drawindexed": standalone_drawindexed,
+            "if_blocks": if_blocks
+        }
+
+
+    draw_command_list = ''
+
+    for section_lines in sections:
+        out_lines = ''
+        #print(section_lines)
+
+        section = section_data[section_lines.splitlines()[0].replace('[', '').replace(']', '')]
+        #print(section_lines)
+        for line in section_lines.splitlines():
+            #print("AAAA", section)
+            #for if_block in section['if_blocks']:
+            #    out_lines = section_lines.replace(if_block, '')
+    #
+            #for drawindexed in section['standalone_drawindexed']:
+            #    out_lines = section_lines.replace(drawindexed, '')
+            if any(line.strip() == item.strip() for item in section['if_blocks']):
+                continue
+            if any(line.strip() == item.strip() for item in section['standalone_drawindexed']):
+                continue
+
+            out_lines += line+'\n'
+
+        if len(section['standalone_drawindexed']) > 0 or len(section['if_blocks']) > 0:
+            out_lines += (f"run = CommandList{section['header']}\n\n\n")
+
+            # Create a new list to store the lines for draw_command_list
+            draw_command_list += f"\n[CommandList{section['header']}]\n"
+
+            # Check if 'drawindexed = auto' is in standalone_drawindexed
+            if any(line.strip() == "drawindexed = auto" for line in section['standalone_drawindexed']):
+                # Add 'drawindexed = auto' 5 times before other lines
+                draw_command_list += "\n".join(["drawindexed = auto"] * 5) + '\n'
+            else:
+                draw_command_list += "".join(section['standalone_drawindexed'])
+            # Append the rest of the standalone_drawindexed and if_blocks to draw_command_list
+            draw_command_list += '\n'.join(section['if_blocks']) + '\n'
+
+        ini_data = ini_data.replace(section_lines, out_lines)
+       #"".join(out_lines))
+
+    #ini_data = "\n".join(out_lines)+"\n\n\n"
+    for command in command_lists[:]:  # Use a copy of the list to avoid modification during iteration
+        if command in draw_command_list:
+                continue
+        draw_command_list += f"\n[{command}]\ndrawindexed = auto\ndrawindexed = auto\ndrawindexed = auto" \
+                             f"\ndrawindexed = auto\ndrawindexed = auto\n\n"
+
+    ini_data += draw_command_list
+   # print(ini_data, draw_command_list)
+
+    return ini_data
+
+
+def generate_default_resources(new_sections):
+    path = os.path.join(os.getcwd(), r'BufferValues\NuraThings\ModManager\DefaultResources.Ini')
+
+    with open(path, 'r+') as ini_file:
+        data = ini_file.read()
+        #ini_file.write("namespace = NuraThings\\ModManager\\DefaultResources\n")
+        for section in new_sections:
+            if section not in data:
+                ini_file.write(section + "\n")
+
+
+def prioritize_positions(res_dict, model_name):
+    # Attempt to find the prioritized resources
+    positions = res_dict.get('Position', [])
+    # First priority: Resource{Character}Position
+    position_priority = f"Resource{model_name}Position"
+    if position_priority in positions:
+        return position_priority
+
+    # Second priority: Resource{Character}PositionBase
+    position_base_priority = f"Resource{model_name}PositionBase"
+    if position_base_priority in positions:
+        return position_base_priority
+
+    # Fall back to the first available Position if none of the priorities match
+    if positions:
+        return positions[0]
+
+    # If no positions are available, return None or handle as needed
+    return None
+
+
+def get_matching_resource(results, target_variable):
+    matching_resource = None
+
+    for result in results:
+        # Check if the target_variable is part of the ps-t1_resource in the result
+        if target_variable in result.get("ps-t1_resource", ""):
+            matching_resource = result["ps-t1_resource"]
+            break  # Stop at the first match
+
+    return matching_resource
+
+
+def handle_resources(data, pst1):
+    global gallery_resources
+
+    command_lists = []
+
+    new_sections = []
+    resources = defaultdict(dict)
+
+    # Regex to match Resource sections with optional suffixes
+    pattern = re.compile(
+        r"\[(Resource(?P<name>[\w]+)(?P<suffix>\.\d+)?)\](?:\s*\n)"
+        r"(type\s*=\s*(?P<type>\w+)\s*)?"
+        r"(format\s*=\s*(?P<format>DXGI_FORMAT_\w+)\s*)?"
+        r"(stride\s*=\s*(?P<stride>\d+)\s*)?"
+        r"(filename\s*=\s*(?P<filename>[^\s]+))",
+        re.MULTILINE
+    )
+
+    models = []
+    pattern2 = r'\[Resource(?P<name>\w+)Position(\.\d+)?\]'
+
+    # Collect model names
+    matches = re.finditer(pattern2, data)
+    for match in matches:
+        if match.group('name') not in models:
+            models.append(match.group('name'))
+
+    # Process each resource match
+    for match in pattern.finditer(data):
+        result = match.groupdict()
+        name = result["name"]
+        suffix = result["suffix"] or ""
+        prefix_key = ""
+
+        if 'Face' in name:
+            continue
+
+        #print("NAM", match)"Position" in name or
+        if "Texcoord" in name:
+            og_section = match.group(0)
+            modified_section = og_section
+            modified_section = re.sub(r"type\s*=\s*Buffer", "type = StructuredBuffer", modified_section)
+            modified_section = re.sub(r"(filename\s*=)", "bind_flags = SHADER_RESOURCE\n\\1", modified_section)
+            data = data.replace(og_section, modified_section)
+        # Determine the model prefix to use
+        for model in models:
+            if model in name:
+                prefix_key = model
+
+        # Store resources in the dictionary
+        if prefix_key:
+            # Helper function to check uniqueness, ignoring the suffix
+            def is_unique(resource_list, new_item):
+                # Strip suffix from the new item
+                base_name = re.sub(r'\.\d+$', '', new_item)
+                # Check if a similar item already exists in the list
+                return all(re.sub(r'\.\d+$', '', existing) != base_name for existing in resource_list)
+
+            # Append resources only if unique (ignoring suffix)
+            if "IB" in name:
+                if is_unique(resources[prefix_key].setdefault("IB", []), f"Resource{name}{suffix}"):
+                    resources[prefix_key]["IB"].append(f"Resource{name}{suffix}")
+            elif "Diffuse" in name:
+                if is_unique(resources[prefix_key].setdefault("Diffuse", []), f"Resource{name}{suffix}"):
+                    resources[prefix_key]["Diffuse"].append(f"Resource{name}{suffix}")
+            elif "Position" in name:
+                if is_unique(resources[prefix_key].setdefault("Position", []), f"Resource{name}{suffix}"):
+                    resources[prefix_key]["Position"].append(f"Resource{name}{suffix}")
+            elif "Texcoord" in name:
+                if is_unique(resources[prefix_key].setdefault("Texcoord", []), f"Resource{name}{suffix}"):
+                    resources[prefix_key]["Texcoord"].append(f"Resource{name}{suffix}")
+
+    output_str = ''
+
+    is_VD_Navia = 'Virgin_Destroyer_Navia_Texture_Edit_Menu' in data
+
+    # Iterate through the resources and construct new sections
+    for model, res_dict in resources.items():
+       # print("B", res_dict)
+        missing_pairs = find_missing_pairs(res_dict)
+        existing_pairs = find_existing_pairs(res_dict)
+        #print(f"Missing pairs for {model}: {missing_pairs}")  # Debug print
+        #print(res_dict)
+        #print("ARARA", missing_pairs, existing_pairs, res_dict)
+        prioritized_position = prioritize_positions(res_dict, prefix_key)
+        texcoord_list = res_dict.get('Texcoord', [])
+
+        output_str += f"vs-t0 = copy {prioritized_position}\n"
+        output_str += f"vs-t1 = {texcoord_list[0]}\n\n"
+
+        for ib, diffuse in existing_pairs:
+            # Remove optional .Number suffix from names
+            #print("ARA", ib, diffuse, existing_pairs)
+
+            diffuse_clean = re.sub(r"\.\d+$", "", diffuse).replace("Resource", "").replace("Diffuse", "")
+
+            matching_resource = get_matching_resource(pst1, diffuse_clean)
+            if matching_resource:
+                diffuse = matching_resource
+
+            if is_VD_Navia and diffuse == 'ResourceNaviaBodyDiffuse':
+                diffuse = 'ResourceNaviaDressDiffuse'
+
+            output_str += f"ib = {ib}\n"
+            output_str += f"ps-t12 = {diffuse}\n\n"
+            output_str += f"run = CommandListTextureOverride{diffuse_clean}\n" \
+                          f"run = CommandListTextureOverride{diffuse_clean}\n" \
+                          f"run = CommandListTextureOverride{diffuse_clean}\n" \
+                          f"run = CommandListTextureOverride{diffuse_clean}\n" \
+                          f"run = CommandListTextureOverride{diffuse_clean}\n\n"
+
+        for part_name, missing_type in missing_pairs:
+            part_name_clean = re.sub(r"\.\d+$", "", part_name.replace('Resource', ''))
+
+            if missing_type == "IB":
+                part_name += 'Diffuse'
+
+                matching_resource = get_matching_resource(pst1, part_name)
+                if matching_resource:
+                    part_name = matching_resource
+
+                output_str += (
+                    f"ib = Resource\\NuraThings\\ModManager\\DefaultResources\\{part_name_clean}IB\n"
+                    f"ps-t12 = {part_name}\n\n"
+                    f"run = CommandListTextureOverride{part_name_clean}\n"
+                    f"run = CommandListTextureOverride{part_name_clean}\n"
+                    f"run = CommandListTextureOverride{part_name_clean}\n"
+                    f"run = CommandListTextureOverride{part_name_clean}\n"
+                    f"run = CommandListTextureOverride{part_name_clean}\n\n"
+                )
+            elif missing_type == "Diffuse":
+                part_name += 'IB'
+                output_str += (
+                    f"ib = {part_name}\n"
+                    f"ps-t12 = Resource\\NuraThings\\ModManager\\DefaultResources\\{part_name_clean}Diffuse\n\n"
+                    f"run = CommandListTextureOverride{part_name_clean}\n"
+                    f"run = CommandListTextureOverride{part_name_clean}\n"
+                    f"run = CommandListTextureOverride{part_name_clean}\n"
+                    f"run = CommandListTextureOverride{part_name_clean}\n"
+                    f"run = CommandListTextureOverride{part_name_clean}\n\n"
+                )
+
+        #print(output_str)
+        gallery_resources = output_str
+
+        pattern = r"CommandListTextureOverride\w+"
+
+        command_lists = []
+        # Use re.findall() to find all matches of the pattern
+        command_lists = re.findall(pattern, gallery_resources)
+
+        for part_name, missing_type in missing_pairs:
+            part_name = part_name.replace('Resource', '')
+            hash_value, match_first_index = extract_section_and_hash(data, part_name)
+
+            #print(f"Extracted for {part_name}: hash={hash_value}, match_first_index={match_first_index}")  # Debug print
+           #print("HS", hash_value, match_first_index, part_name)
+            if hash_value and match_first_index:
+                new_section = create_new_section(part_name, hash_value, match_first_index, missing_type)
+                new_sections.append(new_section)
+                #print(part_name, missing_type)
+                # Initialize the resource if missing
+                resource_name = f"Resource{part_name}{missing_type}"
+                if missing_type == "IB":
+                    new_sections.append(f"if {resource_name} == null\n    {resource_name} = copy IB\nendif\n\n")
+                elif missing_type == "Diffuse":
+                    new_sections.append(f"\nif {resource_name} == null\n"
+                                        f"\tif ps == 037730.0 || ps == 037730.1\n"
+                                        f"\t\t{resource_name} = copy ps-t1\n"
+                                        f"\telse\n"
+                                        f"\t\t{resource_name} = copy ps-t0\n"
+                                        f"\tendif\n"
+                                        f"endif\n")
+
+    # Debug: Print new sections to be added
+    #print("New Sections to be Added:")
+    #for section in new_sections:
+    #    print(section)
+
+    # Write new sections to the INI file
+    if new_sections:
+        generate_default_resources(new_sections)
+    #else:
+    #    print("No new sections to add.")
+
+    return data, command_lists
+
+
+def find_existing_pairs(res_dict):
+    pairs = []
+    # Get lists of IB and Diffuse resources
+    ib_resources = res_dict.get("IB", [])
+    diffuse_resources = res_dict.get("Diffuse", [])
+
+    # Create a set of base names for the IB and Diffuse resources
+    ib_base_names = {name.replace('IB', '') for name in ib_resources}
+    diffuse_base_names = {name.replace('Diffuse', '') for name in diffuse_resources}
+
+    # Find common base names indicating existing pairs
+    common_base_names = ib_base_names.intersection(diffuse_base_names)
+
+    # Collect pairs of IB and Diffuse resources
+    for base_name in common_base_names:
+        ib_name = f"{base_name}IB"
+        if '.0IB' in ib_name:
+            ib_name = ib_name.replace('.0IB', 'IB.0')
+        diffuse_name = f"{base_name}Diffuse"
+        if '.0Diffuse' in diffuse_name:
+            diffuse_name = diffuse_name.replace('.0Diffuse', 'Diffuse.0')
+        pairs.append((ib_name, diffuse_name))
+
+    return pairs
+
+
+def find_missing_pairs(res_dict):
+    missing = []
+    # Get lists of IB and Diffuse resources
+    ib_resources = res_dict.get("IB", [])
+    diffuse_resources = res_dict.get("Diffuse", [])
+
+    # Create a set of base names for the IB and Diffuse resources
+    ib_base_names = {name.replace('IB', '') for name in ib_resources}
+    diffuse_base_names = {name.replace('Diffuse', '') for name in diffuse_resources}
+
+    # Check for missing Diffuse resources for each IB resource
+    for ib_name in ib_base_names:
+        #print("IB", ib_name, diffuse_resources)
+
+        if '.0' in ib_name:
+            ib_name = ib_name.replace('.0', 'Diffuse.0')
+
+            if ib_name not in diffuse_resources:
+                missing.append((ib_name, "Diffuse"))
+
+        elif ib_name + "Diffuse" not in diffuse_resources:
+            missing.append((ib_name, "Diffuse"))
+
+
+
+    # Check for missing IB resources for each Diffuse resource
+    for diffuse_name in diffuse_base_names:
+        #print("Diffuse", diffuse_name, ib_resources)
+
+        if '.0' in diffuse_name:
+            diffuse_name = diffuse_name.replace('.0', 'IB.0')
+
+            if diffuse_name not in ib_resources:
+                missing.append((diffuse_name, "IB"))
+
+        elif diffuse_name + "IB" not in ib_resources:
+            missing.append((diffuse_name, "IB"))
+
+    return missing
+
+
+def extract_section_and_hash(data, part_name):
+    # Build the section name to search for
+    section_name = f"TextureOverride{part_name}"
+    #print(f"Looking for section: {section_name}")  # Debug print
+
+    # Search for the section in the provided data
+    section_pattern = re.compile(rf"\[{section_name}\](.*?)\n\s*\[", re.DOTALL)
+    match = section_pattern.search(data)
+
+    if match:
+        section_content = match.group(1).strip()
+        #print(f"Found section content: {section_content}")  # Debug print
+
+        # Extract the hash and match_first_index
+        hash_pattern = re.search(r"hash\s*=\s*([^\s;]+)", section_content)
+        match_first_index_pattern = re.search(r"match_first_index\s*=\s*([^\s;]+)", section_content)
+
+        # Use the found hash and match_first_index, default to None or 0 if not found
+        hash_value = hash_pattern.group(1) if hash_pattern else None
+        match_first_index = match_first_index_pattern.group(1) if match_first_index_pattern else 0
+        #print("SS", hash_value, match_first_index)
+        return hash_value, match_first_index
+
+    # Return None, None if the section is not found
+    return None, None
+
+
+def create_new_section(part_name, hash_value, match_first_index, missing_type):
+    # Determine the section name based on the missing type
+    section_name = f"TextureOverride{part_name}"
+
+    # Create the new section
+    new_section = (
+        f"[Resource{part_name}{missing_type}]\n\n"
+        f"[{section_name}]\n"
+        f"hash = {hash_value}\n"
+        f"match_priority = -100\n"
+        f"match_first_index = {match_first_index}\n"
+    )
+
+    return new_section
 
 
 def get_sections(data):
-    return re.findall(r'(\[.*\][^\[]*?\n\s*hash\s*=\s*[a-f0-9]{8}[\s\S]*?)(?=\s*(?:\s*;.*\n)*\s*\[)\s*', data + '[',
+
+    sections = re.findall(r'(\[.*\][^\[]*?\n\s*hash\s*=\s*[a-f0-9]{8}[\s\S]*?)(?=\s*(?:\s*;.*\n)*\s*\[)\s*', data + '[',
                       re.IGNORECASE)
 
+    # Filter sections based on the presence of ps-t1 and ps-t2 tags
+    results = []
+    for section in sections:
+        ps_t0 = re.search(r'ps-t0\s*=\s*(Resource\w+)', section)
+        ps_t1 = re.search(r'ps-t1\s*=\s*(Resource\w+)', section)
+        ps_t2 = re.search(r'ps-t2\s*=\s*(Resource\w+)', section)
+
+        # Check if both ps-t1 and ps-t2 exist
+        if ps_t1 and ps_t2:
+            # Capture the section name and ps-t1 resource
+            section_name = re.search(r'\[(.*?)\]', section).group(1)
+            results.append({
+                "section": section_name,
+                "ps-t1_resource": ps_t1.group(1)
+            })
+
+    return sections, results
 
 def parse_key_section(match):
-    section_name, section_text=match  # Unpack the tuple
+    section_name, section_text = match  # Unpack the tuple
 
     # Extract conditions, key, type, and variables
-    conditions=re.search(r'conditions?\s*=\s*([^\n]+)', section_text, re.IGNORECASE)
-    keys=re.findall(r'key\s*=\s*([^\n]+)', section_text, re.IGNORECASE)
-    backs=re.findall(r'back\s*=\s*([^\n]+)', section_text, re.IGNORECASE)
-    type_=re.search(r'type\s*=\s*([^\n]+)', section_text, re.IGNORECASE)
+    conditions = re.search(r'conditions?\s*=\s*([^\n]+)', section_text, re.IGNORECASE)
+    keys = re.findall(r'key\s*=\s*([^\n]+)', section_text, re.IGNORECASE)
+    backs = re.findall(r'back\s*=\s*([^\n]+)', section_text, re.IGNORECASE)
+    type_ = re.search(r'type\s*=\s*([^\n]+)', section_text, re.IGNORECASE)
 
     # Remove the condition line from section_text to avoid capturing its variables
-    section_text_no_condition=re.sub(r'conditions?\s*=\s*([^\n]+)', '', section_text, flags = re.IGNORECASE)
+    section_text_no_condition = re.sub(r'conditions?\s*=\s*([^\n]+)', '', section_text, flags = re.IGNORECASE)
 
     # Match the first uncommented variable declaration (ignoring lines starting with ;)
-    variable_match=re.search(r'^\s*\$(\w+)\s*=\s*([^\n]+)', section_text_no_condition, re.IGNORECASE | re.MULTILINE)
+    variable_match = re.search(r'^\s*\$(\w+)\s*=\s*([^\n]+)', section_text_no_condition, re.IGNORECASE | re.MULTILINE)
 
-    conditions=conditions.group(1).strip() if conditions else None
-    keys=" or ".join([key.strip() for key in keys]) if keys else None
-    backs=" or ".join([back.strip() for back in backs]) if backs else None
-    type_=type_.group(1).strip() if type_ else None
+    conditions = conditions.group(1).strip() if conditions else None
+    keys = " or ".join([key.strip() for key in keys]) if keys else None
+    backs = " or ".join([back.strip() for back in backs]) if backs else None
+    type_ = type_.group(1).strip() if type_ else None
 
-    variable_name=variable_match.group(1).strip() if variable_match else None
-    variable_value=variable_match.group(2).strip() if variable_match else None
-    number_count=len(re.findall(r'\d+', variable_value)) if variable_value else 0
+    variable_name = variable_match.group(1).strip() if variable_match else None
+    variable_value = variable_match.group(2).strip() if variable_match else None
+    number_count = len(re.findall(r'\d+', variable_value)) if variable_value else 0
 
     return [section_name, keys, type_, variable_name, variable_value, number_count, conditions, backs]
 
 
 def get_toggles(data):
-    pattern=r"""
+    pattern = r"""
     \[(Key[^\]]*)\]              # Match and capture section header (e.g., [Key*])
     (                            # Start of group to capture the section's content
     (?:\n(?!\[)[^\n]*)*?         # Match lines within the section, excluding lines starting with [
@@ -351,13 +870,13 @@ def get_toggles(data):
     """
 
     # Compile the regex pattern with VERBOSE flag (without DOTALL)
-    compiled_pattern=re.compile(pattern, flags = re.VERBOSE | re.IGNORECASE)
+    compiled_pattern = re.compile(pattern, flags = re.VERBOSE | re.IGNORECASE)
 
     # Find all matches
-    matches=compiled_pattern.findall(data + '[')
+    matches = compiled_pattern.findall(data + '[')
 
     # Parse each matched section
-    results=[parse_key_section(match) for match in matches]
+    results = [parse_key_section(match) for match in matches]
 
     return results
 
@@ -374,21 +893,23 @@ def collect_ini(folder_path):
 
     global use_mod_name
 
-    ini_files=[]
-    ini_paths=[]
+    global gallery_resources
+
+    ini_files = []
+    ini_paths = []
 
     if 'OutfitTracker.ini' in os.listdir(folder_path):
-        rabbit_path=folder_path
+        rabbit_path = folder_path
         with open(os.path.join(folder_path, 'OutfitTracker.ini'), "r", encoding = "utf-8") as f:
-            lines=f.readlines()
+            lines = f.readlines()
             for line in lines:
                 if 'namespace' in line:
-                    rabbit_namespace=line.replace('namespace = ', '').replace('\n', '')
+                    rabbit_namespace = line.replace('namespace = ', '').replace('\n', '')
                     break
             f.close()
 
     for filename in os.listdir(folder_path):
-        file_path=os.path.join(folder_path, filename)
+        file_path = os.path.join(folder_path, filename)
 
         if 'BufferValues' in file_path:
             continue
@@ -404,41 +925,44 @@ def collect_ini(folder_path):
 
     for ini_file, ini_path in zip(ini_files, ini_paths):
 
-        Sections=[]
-        Key_Conditions=[]
+        gallery_resources = ''
 
-        toggles=[]
+        Sections = []
+        Key_Conditions = []
+
+        toggles = []
 
         if reset_next:
-            RabbitThing=False
-            rabbit_path=''
-            preserve_data=False
-            rabbit_namespace=''
+            RabbitThing = False
+            rabbit_path = ''
+            preserve_data = False
+            rabbit_namespace = ''
 
         if not preserve_data:
-            Character_Name=''
-            Character_ID=0
+            Character_Name = ''
+            Character_ID = 0
 
-        head, tail=os.path.split(folder_path)
-        mod_name=tail
+        head, tail = os.path.split(folder_path)
+        mod_name = tail
         if rabbit_path != '':
-            head, tail=os.path.split(rabbit_path)
-            mod_name=tail
+            head, tail = os.path.split(rabbit_path)
+            mod_name = tail
 
-        use_mod_name=True
+        use_mod_name = True
 
         if rabbit_path != '' and rabbit_path in ini_path and 'OutfitTracker' not in ini_file:
-            out_lines=[]
+            out_lines = []
             with open(os.path.join(folder_path, ini_file), "r+", encoding = "utf-8") as f:
-                data=f.read()
+                data = f.read()
+
                 for Chara in Characters:
                     if Characters[Chara][1] in data and Characters[Chara][2] in data and Characters[Chara][
                         3] in data and Characters[Chara][4] in data:
-                        Character_Name=Chara
-                        Character_ID=Characters[Chara][0]
+                        Character_Name = Chara
+                        Character_ID = Characters[Chara][0]
                         if mod_name is Chara + 'Mod':
-                            use_mod_name=False
-                        preserve_data=True
+                            use_mod_name = False
+                        preserve_data = True
 
                 if 'Mod_Enabled' not in data and rabbit_namespace != '':
                     if not os.path.exists(os.path.join(folder_path, 'DISABLED_ModManagerBackup_' + ini_file)):
@@ -455,15 +979,15 @@ def collect_ini(folder_path):
                     ''')
 
                     f.seek(0)
-                    lines=f.readlines()
+                    lines = f.readlines()
                     for line in lines:
                         if 'condition = $active == 1 && $outfit == $outfitTag' in line:
-                            line=line.replace('\n', '').replace('$active', '$\\' + rabbit_namespace + '\\active')
+                            line = line.replace('\n', '').replace('$active', '$\\' + rabbit_namespace + '\\active')
                             out_lines.append(f'''{line} && $\\{rabbit_namespace}\\Mod_Enabled == 1
 ''')
 
                         elif 'condition = $active == 1' in line:
-                            line=line.replace('\n', '').replace('$active', '$\\' + rabbit_namespace + '\\active')
+                            line = line.replace('\n', '').replace('$active', '$\\' + rabbit_namespace + '\\active')
                             out_lines.append(f'''{line} && $\\{rabbit_namespace}\\Mod_Enabled == 1
 ''')
 
@@ -482,175 +1006,181 @@ def collect_ini(folder_path):
                 f.close()
                 continue
 
-        try:
-            out_lines=[]
-            data=''
-            with open(os.path.join(folder_path, ini_file), "r+", encoding = "utf-8") as f:
-                data=f.read()
+    #    try:
+        out_lines = []
+        data = ''
+        with open(os.path.join(folder_path, ini_file), "r+", encoding = "utf-8") as f:
+            data = f.read()
+            toggles = get_toggles(data)
 
-                toggles=get_toggles(data)
+            if len(toggles) > 0:
+                #print(toggles)
+                toggles_info = 'Toggle (Amount): Key(s) and Back(s)\n'
+                add_other_controls = False
+                for toggle in toggles:
 
-                if len(toggles) > 0:
-                    print(toggles)
-                    toggles_info='Toggle (Amount): Key(s) and Back(s)\n'
-                    add_other_controls=False
+                    if toggle[0] and toggle[1] and toggle[2] and toggle[4]:
+                        if toggle[2] == 'hold':
+                            add_other_controls = True
+
+                        elif toggle[2] == 'toggle' or toggle[2] == 'cycle':
+                            amount_of_toggles = 0
+                            if toggle[2] == 'toggle':
+                                amount_of_toggles = 2
+                            else:
+                                amount_of_toggles = toggle[5]
+                            if toggle[0].replace('Key', '').capitalize() != toggle[3].capitalize():
+                                toggles_info += f'''\n{toggle[0].replace('Key', '').capitalize()}/{toggle[3].capitalize()} ({amount_of_toggles}): {toggle[1]}{" and " + toggle[7] if toggle[7] else ""}'''
+                            else:
+                                toggles_info += f'''\n{toggle[3].capitalize()} ({amount_of_toggles}): {toggle[1]}{" and " + toggle[7] if toggle[7] else ""}'''
+
+                if add_other_controls:
+                    toggles_info += '\n\n\nHold: Key(s)\n'
                     for toggle in toggles:
+                        if (toggle[0] and toggle[1] and toggle[2] and toggle[4]) and (toggle[2] == 'hold'):
+                            if toggle[0].replace('Key', '').capitalize() != toggle[3].capitalize():
+                                toggles_info += f'''\n{toggle[0].replace('Key', '').capitalize()}/{toggle[3].capitalize()}: {toggle[1]}'''
+                            else:
+                                toggles_info += f'''\n{toggle[3].capitalize()}: {toggle[1]}'''
 
-                        if toggle[0] and toggle[1] and toggle[2] and toggle[4]:
-                            if toggle[2] == 'hold':
-                                add_other_controls=True
+                if toggles_info != 'Toggle (Amount) - Key\n':
+                    with open(os.path.join(folder_path, 'Toggles.txt'), "w", encoding = "utf-8") as ft:
+                        ft.write(toggles_info)
+                        ft.close()
+                        print('Generated Toggles.txt inside - ' + folder_path + '\n')
 
-                            elif toggle[2] == 'toggle' or toggle[2] == 'cycle':
-                                amount_of_toggles=0
-                                if toggle[2] == 'toggle':
-                                    amount_of_toggles=2
-                                else:
-                                    amount_of_toggles=toggle[5]
-                                if toggle[0].replace('Key', '').capitalize() != toggle[3].capitalize():
-                                    toggles_info+=f'''\n{toggle[0].replace('Key', '').capitalize()}/{toggle[3].capitalize()} ({amount_of_toggles}): {toggle[1]}{" and " + toggle[7] if toggle[7] else ""}'''
-                                else:
-                                    toggles_info+=f'''\n{toggle[3].capitalize()} ({amount_of_toggles}): {toggle[1]}{" and " + toggle[7] if toggle[7] else ""}'''
+            og_data = data
 
-                    if add_other_controls:
-                        toggles_info+='\n\n\nHold: Key(s)\n'
-                        for toggle in toggles:
-                            if (toggle[0] and toggle[1] and toggle[2] and toggle[4]) and (toggle[2] == 'hold'):
-                                if toggle[0].replace('Key', '').capitalize() != toggle[3].capitalize():
-                                    toggles_info+=f'''\n{toggle[0].replace('Key', '').capitalize()}/{toggle[3].capitalize()}: {toggle[1]}'''
-                                else:
-                                    toggles_info+=f'''\n{toggle[3].capitalize()}: {toggle[1]}'''
+            data_lines = data.splitlines()
+            credits_string = ''
+            if match := re.search(r'\[ResourceCreditInfo.*\][\s\S]*?data\s*=\s*\"(.*)\"', data, re.IGNORECASE):
+                credits_string = match.group(1)
 
-                    if toggles_info != 'Toggle (Amount) - Key\n':
-                        with open(os.path.join(folder_path, 'Toggles.txt'), "w", encoding = "utf-8") as ft:
-                            ft.write(toggles_info)
-                            ft.close()
-                            print('Generated Toggles.txt inside - ' + folder_path + '\n')
+            for condition_line in data_lines:
+                if 'condition = ' in condition_line and '$Mod_Enabled' not in condition_line:
+                    if condition_line not in Key_Conditions:
+                        Key_Conditions.append(condition_line)
 
-                og_data=data
-                data_lines=data.splitlines()
-                credits_string=''
-                if match:=re.search(r'\[ResourceCreditInfo.*\][\s\S]*?data\s*=\s*\"(.*)\"', data, re.IGNORECASE):
-                    credits_string=match.group(1)
+            RabbitThing = 'OutfitTracker' in ini_file
 
-                for condition_line in data_lines:
-                    if 'condition = ' in condition_line and '$Mod_Enabled' not in condition_line:
-                        if condition_line not in Key_Conditions:
-                            Key_Conditions.append(condition_line)
+            if not RabbitThing:
+                for Chara in Characters:
+                    if Characters[Chara][1] in data and Characters[Chara][2] in data and Characters[Chara][
+                        3] in data and Characters[Chara][4] in data:
+                        Character_Name = Chara
+                        Character_ID = Characters[Chara][0]
+                        if mod_name is Chara + 'Mod':
+                            use_mod_name = False
+            else:
+                reset_next = True
 
-                Sections=get_sections(data)
+            if 'global $ModID =' not in data and (RabbitThing or (Character_Name != '' and (
+                    'TextureOverride' in data or 'ShaderOverride' in data) and 'namespace = NuraThings' not in data and '$\\NuraThings\\SkillCounter' not in data)):
 
-                RabbitThing='OutfitTracker' in ini_file
+                Sections, Sections30 = get_sections(data)
 
                 if not RabbitThing:
-                    for Chara in Characters:
-                        if Characters[Chara][1] in data and Characters[Chara][2] in data and Characters[Chara][
-                            3] in data and Characters[Chara][4] in data:
-                            Character_Name=Chara
-                            Character_ID=Characters[Chara][0]
-                            if mod_name is Chara + 'Mod':
-                                use_mod_name=False
-                else:
-                    reset_next=True
+                    data, command_lists = handle_resources(data, Sections30)
+                    data = get_drawindexed(data, command_lists)
 
-                if 'global $ModID =' not in data and (RabbitThing or (Character_Name != '' and (
-                        'TextureOverride' in data or 'ShaderOverride' in data) and 'namespace = NuraThings' not in data and '$\\NuraThings\\SkillCounter' not in data)):
+                if len(Key_Conditions) > 0:
+                    for condition in Key_Conditions:
+                        if '$active' in condition or '$object_detected' in condition:
+                            data = data.replace(condition, condition + ' && $Mod_Enabled')
+                        elif '$active' in data:
+                            data = data.replace(condition, condition + ' && $active && $Mod_Enabled')
+                        else:
+                            data = data.replace(condition, condition + ' && $Mod_Enabled')
 
-                    if len(Key_Conditions) > 0:
-                        for condition in Key_Conditions:
-                            if '$active' in condition or '$object_detected' in condition:
-                                data=data.replace(condition, condition + ' && $Mod_Enabled', 1)
-                            elif '$active' in data:
-                                data=data.replace(condition, condition + ' && $active && $Mod_Enabled', 1)
-                            else:
-                                data=data.replace(condition, condition + ' && $Mod_Enabled', 1)
+                Sections, Sections30 = get_sections(data)
 
-                    for Section in Sections:
-                        OldSection=Section
-                        PartsOfSection=Section.splitlines()
-                        has_match_priority=False
+                print(Sections30)
+                for Section in Sections:
+                    OldSection = Section
+                    PartsOfSection = Section.splitlines()
+                    has_match_priority = False
 
-                        max_index=-1
+                    max_index = -1
 
-                        if 'match_priority' in Section or 'allow_duplicate_hash' in Section or 'match_first_index' in Section or 'match_index_count' in Section:
-                            has_match_priority=True
+                    if 'match_priority' in Section or 'allow_duplicate_hash' in Section or 'match_first_index' in Section or 'match_index_count' in Section:
+                        has_match_priority = True
 
-                            for i, elem in enumerate(Section):
-                                if any(target_string in str(elem) for target_string in target_strings):
-                                    max_index=max(max_index, i)
+                        for i, elem in enumerate(Section):
+                            if any(target_string in str(elem) for target_string in target_strings):
+                                max_index = max(max_index, i)
 
-                        HashID=[index for (index, item) in enumerate(PartsOfSection) if
-                                'hash' in item and ';' not in item and 'allow_duplicate_hash' not in item]
+                    HashID = [index for (index, item) in enumerate(PartsOfSection) if
+                              'hash' in item and ';' not in item and 'allow_duplicate_hash' not in item]
 
-                        HashID=HashID[0]
-                        Hash=PartsOfSection[HashID]
+                    HashID = HashID[0]
+                    Hash = PartsOfSection[HashID]
 
-                        if not has_match_priority:
-                            if '[TextureOverride' in Section:
-                                Section=Section.replace(Hash, Hash + '\nmatch_priority = 0', 1)
-                            elif '[ShaderOverride' in Section:
-                                Section=Section.replace(Hash, Hash + '\nallow_duplicate_hash = True', 1)
-                            PartsOfSection=Section.splitlines()
+                    if not has_match_priority:
+                        if '[TextureOverride' in Section:
+                            Section = Section.replace(Hash, Hash + '\nmatch_priority = 0', 1)
+                        elif '[ShaderOverride' in Section:
+                            Section = Section.replace(Hash, Hash + '\nallow_duplicate_hash = True', 1)
+                        PartsOfSection = Section.splitlines()
 
-                        if 'if $Mod_Enabled' not in Section:
-                            priority_index=max_index if max_index > -1 else HashID + 1
+                    if 'if $Mod_Enabled' not in Section:
+                        priority_index = max_index if max_index > -1 else HashID + 1
+                        Section = Section.replace(PartsOfSection[priority_index],
+                                                  PartsOfSection[priority_index] + '\nif $Mod_Enabled', 1)
 
-                            Section=Section.replace(PartsOfSection[priority_index],
-                                                    PartsOfSection[priority_index] + '\nif $Mod_Enabled', 1)
+                        # print(PartsOfSection, HashID)
 
-                            # print(PartsOfSection, HashID)
+                        depth = 0
+                        indent = ' ' * 4
+                        indented_section_lines = []
 
-                            depth=0
-                            indent=' ' * 4
-                            indented_section_lines=[]
+                        for line in Section.splitlines():
 
-                            for line in Section.splitlines():
+                            conditional = 0
+                            first_word = line.strip().split(' ')[0].lower()
 
-                                conditional=0
-                                first_word=line.strip().split(' ')[0].lower()
+                            if first_word == 'if':
+                                depth += 1
+                                conditional = 1
 
-                                if first_word == 'if':
-                                    depth+=1
-                                    conditional=1
+                            elif first_word in ['else', 'elif']:
+                                conditional = 1
 
-                                elif first_word in ['else', 'elif']:
-                                    conditional=1
+                            elif first_word == 'endif':
+                                depth -= 1
 
-                                elif first_word == 'endif':
-                                    depth-=1
+                            indented_section_lines.append(indent * (depth - conditional) + line.strip())
 
-                                indented_section_lines.append(indent * (depth - conditional) + line.strip())
+                        Section = Section.replace(Section, '\n'.join(indented_section_lines), 1)
 
-                            Section=Section.replace(Section, '\n'.join(indented_section_lines), 1)
+                        # print('1', Section)
+                        if RabbitThing and '$currentOutfit = $nextOutfit' in Section:
+                            Section += '\nelse\n\t$currentOutfit = -1\nendif'
+                        else:
+                            Section += '\nendif'
 
-                            # print('1', Section)
-                            if RabbitThing and '$currentOutfit = $nextOutfit' in Section:
-                                Section+='\nelse\n\t$currentOutfit = -1\nendif'
-                            else:
-                                Section+='\nendif'
+                        if 'if $Mod_Enabled\nendif' in Section:
+                            Section = Section.replace('if $Mod_Enabled\nendif', '')
 
-                            if 'if $Mod_Enabled\nendif' in Section:
-                                Section=Section.replace('if $Mod_Enabled\nendif', '')
+                    data = data.replace(OldSection, Section, 1)
 
-                        data=data.replace(OldSection, Section, 1)
+                data += '\n[Constants]\n' + Variables.format(Character_ID = Character_ID,
+                                                             Mod_ID = Mod_IDs[Character_Name])
+                Mod_IDs[Character_Name] = Mod_IDs[Character_Name] + 1
 
-                    data+='\n[Constants]\n' + Variables.format(Character_ID = Character_ID,
-                                                               Mod_ID = Mod_IDs[Character_Name])
-                    Mod_IDs[Character_Name]=Mod_IDs[Character_Name] + 1
+                data += '\n[Present]\n' + Present_Section.format(Character_Name = Character_Name)
 
-                    data+='\n[Present]\n' + Present_Section.format(Character_Name = Character_Name)
+                set_toggles = "Resource\\NuraThings\\ModManager\\ModToggles = ref ResourceModToggles unless_null"
 
-                    set_toggles="Resource\\NuraThings\\ModManager\\ModToggles = ref ResourceModToggles unless_null"
-
-                    if use_mod_name:
-                        data+=f'''
+                if use_mod_name:
+                    data += f'''
 
 [ResourceModName]
 type = Buffer
 data = "{mod_name}"
 
 '''
-                    else:
-                        data+=f'''
+                else:
+                    data += f'''
 
 [ResourceModName]
 ;type = Buffer
@@ -658,20 +1188,20 @@ data = "{mod_name}"
 
 '''
 
-                    if credits_string != '':
-                        data+=f'''[ResourceModAuthor]
+                if credits_string != '':
+                    data += f'''[ResourceModAuthor]
 type = Buffer
 data = "{credits_string}"
 
 '''
-                    else:
-                        data+=f'''[ResourceModAuthor]
+                else:
+                    data += f'''[ResourceModAuthor]
 ;type = Buffer
 ;data = ""
 
 '''
 
-                    data+=f'''[ResourceModDesc]
+                data += f'''[ResourceModDesc]
 ;type = Buffer
 ;data = ""
 
@@ -698,47 +1228,85 @@ Resource\\NuraThings\\ModManager\\ModLogo = ref ResourceModLogo unless_null
 {set_toggles if len(toggles) > 0 else ""}
 
 $Resources_Set = 1
+
+
+[ResourceDMap]
+type = RWTexture2D
+format = R32_FLOAT
+width = 1920
+height = 1080
+array = 1
+msaa = 1
+
+[CustomShaderDrawModel]
+run = BuiltInCommandListUnbindAllRenderTargets
+
+cs = Mods/BufferValues/NuraThings/Shaders/DrawMesh.hlsl
+hs = null
+ds = null
+gs = null
+vs = Mods/BufferValues/NuraThings/Shaders/DrawMesh.hlsl
+ps = Mods/BufferValues/NuraThings/Shaders/DrawMesh.hlsl
+
+o0 = set_viewport bb
+
+if $\\NuraThings\\ModManager\\gallery_draw_count < 3
+    clear = ResourceDMap
+    $\\NuraThings\\ModManager\\gallery_draw_count = $\\NuraThings\\ModManager\\gallery_draw_count+1
+endif
+
+ps-u3 = ResourceDMap
+
+blend = ADD SRC_ALPHA INV_SRC_ALPHA
+topology = triangle_list
+
+fill = Solid
+cull = Back
+front = Clockwise
+
+'''+gallery_resources+'''
+
 '''
 
-                    data+='\n[ResourceModPath]\ntype= Buffer\nformat = R8_UINT\nfilename = ModPath.txt'
+                data += '\n[ResourceModPath]\ntype= Buffer\nformat = R8_UINT\nfilename = ModPath.txt'
 
-                    with open(os.path.join(folder_path, 'ModPath.txt'), "w+", encoding = "utf-8") as mp:
-                        mp.write(ini_path)
-                        mp.close()
-                        print('Generated - ' + os.path.join(folder_path, 'ModPath.txt') + '\n')
-
-                    if data != og_data:
-                        f.seek(0)
-                        f.truncate(0)
-                    f.close()
-
-                if not os.path.exists(os.path.join(folder_path, 'DISABLED_ModManagerBackup_' + ini_file)):
-                    with open(os.path.join(folder_path, 'DISABLED_ModManagerBackup_' + ini_file), "w",
-                              encoding = "utf-8") as f:
-                        f.write(og_data)
-                        f.close()
-                        print(f'''Created Backup - {os.path.join(folder_path, 'DISABLED_ModManagerBackup_' + ini_file)}
-''')
-                else:
-                    print(
-                        f'''Backup already Exists - {os.path.join(folder_path, 'DISABLED_ModManagerBackup_' + ini_file)}
-''')
+                with open(os.path.join(folder_path, 'ModPath.txt'), "w+", encoding = "utf-8") as mp:
+                    mp.write(ini_path)
+                    mp.close()
+                    print('Generated - ' + os.path.join(folder_path, 'ModPath.txt') + '\n')
 
                 if data != og_data:
-                    with open(os.path.join(folder_path, ini_file), "w", encoding = "utf-8") as f:
-                        f.write(data)
-                        print(f'''Affected File - {ini_path}
+                    f.seek(0)
+                    f.truncate(0)
+                f.close()
+
+            if not os.path.exists(os.path.join(folder_path, 'DISABLED_ModManagerBackup_' + ini_file)):
+                with open(os.path.join(folder_path, 'DISABLED_ModManagerBackup_' + ini_file), "w",
+                          encoding = "utf-8") as f:
+                    f.write(og_data)
+                    f.close()
+                    print(f'''Created Backup - {os.path.join(folder_path, 'DISABLED_ModManagerBackup_' + ini_file)}
 ''')
-                        f.close()
-                else:
-                    print(f'''Analyzed File - {ini_path}
+            else:
+                print(
+                    f'''Backup already Exists - {os.path.join(folder_path, 'DISABLED_ModManagerBackup_' + ini_file)}
+''')
+
+            if data != og_data:
+                with open(os.path.join(folder_path, ini_file), "w", encoding = "utf-8") as f:
+                    f.write(data)
+                    print(f'''Affected File - {ini_path}
+''')
+                    f.close()
+            else:
+                print(f'''Analyzed File - {ini_path}
 ''')
 
 
-        except Exception as e:
-            print("Unable to open, skipping")
-            print(f"Error: {e}")
-            print(f"Try Using RestoreInis.py First - Contact me if it still fails")
+      #  except Exception as e:
+      #      print("Unable to open, skipping")
+      #      print(f"Error: {e}")
+      #      print(f"Try Using RestoreInis.py First - Contact me if it still fails")
 
 
 def main():
@@ -746,7 +1314,7 @@ def main():
 
     if os.path.exists(os.path.join(os.getcwd(), 'ModsIDs.json')):
         with open(os.path.join(os.getcwd(), 'ModsIDs.json'), 'r') as file:
-            Mod_IDs=json.load(file)
+            Mod_IDs = json.load(file)
 
     collect_ini(os.getcwd())
 
